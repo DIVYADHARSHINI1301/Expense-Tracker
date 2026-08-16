@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ExpenseTracker Icon Generator</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .icon-preview {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .icon-item {
+            text-align: center;
+        }
+        canvas {
+            border-radius: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            max-width: 100%;
+            height: auto;
+        }
+        .size-label {
+            margin-top: 10px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        .download-btn {
+            margin-top: 10px;
+            padding: 8px 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .download-btn:hover {
+            transform: scale(1.05);
+        }
+        .instructions {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .instructions h2 {
+            color: #667eea;
+            margin-top: 0;
+        }
+        .instructions ol {
+            line-height: 1.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💰 ExpenseTracker App Icon Generator</h1>
+        
+        <div class="instructions">
+            <h2>📱 How to Use:</h2>
+            <ol>
+                <li>Click "Download" button below each icon size</li>
+                <li>Save all icons to your <code>public/</code> folder</li>
+                <li>Build your app: <code>npm run build</code></li>
+                <li>Deploy to hosting (Vercel/Netlify/Firebase)</li>
+                <li>Open the deployed link on your mobile</li>
+                <li>Tap "Add to Home Screen" in browser menu</li>
+                <li>Enjoy your beautiful app icon! 🎉</li>
+            </ol>
+        </div>
+
+        <div class="icon-preview" id="iconPreview"></div>
+    </div>
+
+    <script>
+        const sizes = [72, 96, 128, 144, 152, 192, 384, 512];
+        
+        function createIcon(size) {
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            
+            // Gradient background
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#667eea');
+            gradient.addColorStop(0.5, '#764ba2');
+            gradient.addColorStop(1, '#f093fb');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, size, size);
+            
+            // Wallet icon
+            ctx.fillStyle = 'white';
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = size * 0.04;
+            
+            // Wallet shape
+            const centerX = size / 2;
+            const centerY = size / 2;
+            const walletWidth = size * 0.6;
+            const walletHeight = size * 0.45;
+            const radius = size * 0.08;
+            
+            // Draw rounded rectangle (wallet)
+            ctx.beginPath();
+            ctx.moveTo(centerX - walletWidth/2 + radius, centerY - walletHeight/2);
+            ctx.lineTo(centerX + walletWidth/2 - radius, centerY - walletHeight/2);
+            ctx.quadraticCurveTo(centerX + walletWidth/2, centerY - walletHeight/2, centerX + walletWidth/2, centerY - walletHeight/2 + radius);
+            ctx.lineTo(centerX + walletWidth/2, centerY + walletHeight/2 - radius);
+            ctx.quadraticCurveTo(centerX + walletWidth/2, centerY + walletHeight/2, centerX + walletWidth/2 - radius, centerY + walletHeight/2);
+            ctx.lineTo(centerX - walletWidth/2 + radius, centerY + walletHeight/2);
+            ctx.quadraticCurveTo(centerX - walletWidth/2, centerY + walletHeight/2, centerX - walletWidth/2, centerY + walletHeight/2 - radius);
+            ctx.lineTo(centerX - walletWidth/2, centerY - walletHeight/2 + radius);
+            ctx.quadraticCurveTo(centerX - walletWidth/2, centerY - walletHeight/2, centerX - walletWidth/2 + radius, centerY - walletHeight/2);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Card slot
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.fillRect(centerX - walletWidth/2 + size*0.08, centerY - walletHeight/4, walletWidth - size*0.16, size*0.06);
+            
+            // Dollar sign
+            ctx.fillStyle = '#667eea';
+            ctx.font = `bold ${size * 0.35}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('₹', centerX, centerY + size*0.05);
+            
+            return canvas;
+        }
+        
+        const preview = document.getElementById('iconPreview');
+        
+        sizes.forEach(size => {
+            const item = document.createElement('div');
+            item.className = 'icon-item';
+            
+            const canvas = createIcon(size);
+            item.appendChild(canvas);
+            
+            const label = document.createElement('div');
+            label.className = 'size-label';
+            label.textContent = `${size}x${size}`;
+            item.appendChild(label);
+            
+            const btn = document.createElement('button');
+            btn.className = 'download-btn';
+            btn.textContent = 'Download';
+            btn.onclick = () => {
+                const link = document.createElement('a');
+                link.download = `icon-${size}x${size}.png`;
+                link.href = canvas.toDataURL();
+                link.click();
+            };
+            item.appendChild(btn);
+            
+            preview.appendChild(item);
+        });
+    </script>
+</body>
+</html>
