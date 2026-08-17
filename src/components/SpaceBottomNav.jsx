@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Home, History, BarChart3, Target, User, Plus, X } from 'lucide-react';
 import { useSpace } from '../context/SpaceContext';
@@ -34,7 +34,10 @@ const navItemsForAccount = (account) => {
 };
 
 /* ─── Icon SVGs per account type ─────────────────────────── */
-const AccountIcon = ({ type, className }) => {
+const AccountIcon = ({ type, logo, className }) => {
+  if (logo) return (
+    <img src={logo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+  );
   if (type === 'wallet') return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
       <path d="M20 12V8a2 2 0 00-2-2H4a2 2 0 00-2 2v10a2 2 0 002 2h14a2 2 0 002-2v-4"/>
@@ -56,147 +59,242 @@ const AccountIcon = ({ type, className }) => {
   );
 };
 
-/* ─── Arc positions for up to 3 visible circles ──────────── */
-const ARC_OFFSETS = [
-  { x: -76, yExtra: 0  },
-  { x:   0, yExtra: 18 },
-  { x:  76, yExtra: 0  },
-];
-
 const PulseRing = ({ color }) => (
   <span className="absolute inset-0 rounded-full animate-space-pulse pointer-events-none"
     style={{ border: `2px solid ${color}`, opacity: 0 }} />
 );
 
-/* ─── Arc Space Switcher ─────────────────────────────────── */
+/* ─── Arc Carousel with Arc-Motion Swiping ───── */
 const SpaceSwitcher = ({ accounts, activeId, onSwitch, onAdd }) => {
+  const n = accounts.length;
+  const activeIdx = accounts.findIndex(a => a.id === activeId);
+
+  const [centerIdx, setCenterIdx] = useState(activeIdx === -1 ? 0 : activeIdx);
+  const [rotation, setRotation] = useState(0);
+
+  useEffect(() => {
+    const idx = accounts.findIndex(a => a.id === activeId);
+    if (idx !== -1) setCenterIdx(idx);
+  }, [activeId, accounts]);
+
+  const dragRef = useRef({ active: false, startX: 0, startY: 0, lastX: 0, lastY: 0, velX: 0 });
+  const rafRef  = useRef(null);
   const [burstId, setBurstId] = useState(null);
   const burstTimer = useRef(null);
-  const [pickerOpen, setPickerOpen] = useState(false);
 
-  // First 3 accounts shown as arc circles; rest accessible via "+" picker
-  const visible  = accounts.slice(0, 3);
-  const overflow = accounts.slice(3);
-  // Replace 3rd slot with "+" if there are overflow accounts
-  const showPlus = overflow.length > 0;
+  const mod = (i, m) => ((i % m) + m) % m;
 
-  const handleClick = (account) => {
-    if (account.id === activeId) return;
-    setBurstId(account.id);
-    clearTimeout(burstTimer.current);
-    burstTimer.current = setTimeout(() => setBurstId(null), 600);
-    onSwitch(account);
+  const shiftCenter = useCallback((dir) => {
+    const next = mod(centerIdx + dir, n);
+    setCenterIdx(next);
+    setRotation(0);
+    const acct = accounts[next];
+    if (acct) {
+      setBurstId(acct.id);
+      clearTimeout(burstTimer.current);
+      burstTimer.current = setTimeout(() => setBurstId(null), 600);
+      onSwitch(acct);
+    }
+  }, [centerIdx, n, accounts, onSwitch]);
+
+  const onPointerDown = (e) => {
+    cancelAnimationFrame(rafRef.current);
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    dragRef.current = { active: true, startX: clientX, startY: clientY, lastX: clientX, lastY: clientY, velX: 0 };
   };
 
-  useEffect(() => () => clearTimeout(burstTimer.current), []);
+  const onPointerMove = (e) => {
+    if (!dragRef.current.active) return;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    dragRef.current.velX = clientX - dragRef.current.lastX;
+    dragRef.current.lastX = clientX;
+    dragRef.current.lastY = clientY;
+    
+    const dx = clientX - dragRef.current.startX;
+    const dy = clientY - dragRef.current.startY;
+    
+    // Arc motion: horizontal drag maps to rotation
+    // Left swipe (negative dx) = next, Right swipe (positive dx) = prev
+    setRotation(dx / 80);
+  };
 
-  // Build the 3 arc slots
-  const slots = showPlus
-    ? [...visible.slice(0, 2), null]   // null = "+" slot
-    : visible;
+  const onPointerUp = () => {
+    if (!dragRef.current.active) return;
+    dragRef.current.active = false;
+    const vel = dragRef.current.velX;
+    const offset = rotation;
+
+    if (Math.abs(offset) > 0.4 || Math.abs(vel) > 8) {
+      // Swipe detected
+      shiftCenter(offset < 0 ? 1 : -1);
+    } else {
+      // Snap back
+      let cur = offset;
+      const snap = () => {
+        cur *= 0.75;
+        setRotation(cur);
+        if (Math.abs(cur) > 0.01) rafRef.current = requestAnimationFrame(snap);
+        else setRotation(0);
+      };
+      rafRef.current = requestAnimationFrame(snap);
+    }
+  };
+
+  useEffect(() => () => {
+    cancelAnimationFrame(rafRef.current);
+    clearTimeout(burstTimer.current);
+  }, []);
+
+  if (n === 0) return null;
+
+  // Arc geometry: 3 items on dome curve
+  const R = 75;  // arc radius
+  const ANGLES = [-65, 0, 65];  // left, center, right on arc
+
+  const getArcPos = (angleDeg) => {
+    const rad = (angleDeg * Math.PI) / 180;
+    const cx = Math.sin(rad) * R;
+    const cy = Math.cos(rad) * R - R;  // dome shape: center highest
+    return { cx, cy };
+  };
+
+  const getSlotProps = (angleDeg) => {
+    const absAngle = Math.abs(angleDeg);
+    if (absAngle < 5) return { scale: 1.2, opacity: 1, zIndex: 10 };
+    if (absAngle < 70) return { scale: 0.9, opacity: 0.8, zIndex: 5 };
+    return { scale: 0.7, opacity: 0.4, zIndex: 2 };
+  };
+
+  // 3 visible items
+  const leftIdx   = mod(centerIdx - 1, n);
+  const rightIdx  = mod(centerIdx + 1, n);
+  const slotItems = [
+    { acct: accounts[leftIdx],  baseAngle: ANGLES[0] },
+    { acct: accounts[centerIdx], baseAngle: ANGLES[1] },
+    { acct: accounts[rightIdx], baseAngle: ANGLES[2] },
+  ];
+
+  const lerp = (a, b, t) => a + (b - a) * t;
+
+  const getItemPos = (baseAngle) => {
+    // During drag, interpolate angle smoothly
+    const angle = baseAngle + rotation * 65;  // rotation maps to angle change
+    const { cx, cy } = getArcPos(angle);
+    const { scale, opacity, zIndex } = getSlotProps(angle);
+    return { cx, cy, scale, opacity, zIndex };
+  };
 
   return (
-    <>
-      <div className="relative flex justify-center items-end h-16 pointer-events-none">
-        {slots.map((account, i) => {
-          const { x, yExtra } = ARC_OFFSETS[i] || ARC_OFFSETS[0];
+    <div
+      className="relative flex justify-center items-end select-none"
+      style={{ height: 130, touchAction: 'none' }}
+      onMouseDown={onPointerDown} onMouseMove={onPointerMove}
+      onMouseUp={onPointerUp}   onMouseLeave={onPointerUp}
+      onTouchStart={onPointerDown} onTouchMove={onPointerMove} onTouchEnd={onPointerUp}
+    >
+      {/* Arc guide curve */}
+      <svg
+        className="absolute pointer-events-none"
+        style={{ top: 0, left: '50%', transform: 'translateX(-50%)' }}
+        width="220" height="110" viewBox="0 0 220 110"
+      >
+        <path
+          d="M 20 100 Q 110 10 200 100"
+          fill="none"
+          stroke="rgba(74,85,104,0.12)"
+          strokeWidth="2"
+          strokeDasharray="4 4"
+        />
+      </svg>
 
-          // "+" slot
-          if (account === null) {
-            return (
-              <button key="plus" onClick={() => setPickerOpen(true)}
-                className="absolute pointer-events-auto"
-                style={{ bottom: 22 + yExtra, left: `calc(50% + ${x}px - 24px)`, zIndex: 5 }}>
-                <span className="relative flex items-center justify-center w-12 h-12 rounded-full transition-all duration-300"
-                  style={{ background: 'rgba(26,35,50,0.95)', border: '1.5px dashed #4a5568', color: '#4a5568' }}>
-                  <Plus className="w-5 h-5" />
-                </span>
-                <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[9px] font-bold whitespace-nowrap text-[#4a5568]">More</span>
-              </button>
-            );
-          }
+      {slotItems.map(({ acct, baseAngle }) => {
+        if (!acct) return null;
+        const isCenter  = Math.abs(baseAngle) < 5;
+        const isActive  = acct.id === activeId;
+        const accent    = acct.accent || '#4a9eff';
+        const { cx, cy, scale, opacity, zIndex } = getItemPos(baseAngle);
+        const isDragging = dragRef.current.active;
 
-          const isActive = account.id === activeId;
-          const accent   = account.accent || '#4a9eff';
-          const bottomPx = 22 + (isActive ? 14 : 0) + yExtra;
+        return (
+          <button
+            key={acct.id + '-' + baseAngle}
+            onClick={() => {
+              if (Math.abs(rotation) > 0.1) return;
+              if (baseAngle < 0) shiftCenter(-1);
+              else if (baseAngle > 0) shiftCenter(1);
+              else if (isActive) return;
+              else onSwitch(acct);
+            }}
+            className="absolute"
+            style={{
+              left: `calc(50% + ${cx}px - 24px)`,
+              top: `calc(0px + ${cy}px)`,
+              transform: `scale(${scale})`,
+              opacity,
+              transition: isDragging
+                ? 'none'
+                : 'left 0.45s cubic-bezier(0.22,1,0.36,1), top 0.45s cubic-bezier(0.22,1,0.36,1), transform 0.45s cubic-bezier(0.22,1,0.36,1), opacity 0.45s ease',
+              zIndex,
+              willChange: 'transform, opacity',
+            }}
+          >
+            {isActive && isCenter && (
+              <span className="absolute rounded-full pointer-events-none"
+                style={{ inset: -8, background: `radial-gradient(circle, ${accent}55 0%, transparent 70%)`, filter: 'blur(6px)' }} />
+            )}
+            {isActive && isCenter && <PulseRing color={accent} />}
+            {burstId === acct.id && isCenter && (
+              <span className="absolute inset-0 rounded-full animate-burst-ring pointer-events-none"
+                style={{ border: `2px solid ${accent}` }} />
+            )}
 
-          return (
-            <button key={account.id} onClick={() => handleClick(account)}
-              className="absolute pointer-events-auto"
+            <span
+              className="relative flex items-center justify-center w-12 h-12 rounded-full cursor-grab active:cursor-grabbing"
               style={{
-                bottom: bottomPx,
-                left: `calc(50% + ${x}px - 24px)`,
-                transition: 'bottom 0.38s cubic-bezier(0.22,1,0.36,1), transform 0.38s cubic-bezier(0.22,1,0.36,1)',
-                transform: isActive ? 'scale(1.18)' : 'scale(1)',
-                zIndex: isActive ? 10 : 5,
-              }}>
-              {isActive && (
-                <span className="absolute rounded-full pointer-events-none"
-                  style={{ inset: -6, background: `radial-gradient(circle, ${accent}55 0%, transparent 70%)`, filter: 'blur(5px)' }} />
-              )}
-              {isActive && <PulseRing color={accent} />}
-              {burstId === account.id && (
-                <span className="absolute inset-0 rounded-full animate-burst-ring pointer-events-none"
-                  style={{ border: `2px solid ${accent}` }} />
-              )}
-              <span className="relative flex items-center justify-center w-12 h-12 rounded-full transition-all duration-300"
-                style={{
-                  background: isActive ? `linear-gradient(135deg, ${accent}, ${accent}cc)` : 'rgba(26,35,50,0.95)',
-                  boxShadow: isActive ? `0 0 18px 4px ${accent}66, 0 4px 12px rgba(0,0,0,0.3)` : '0 2px 8px rgba(0,0,0,0.25)',
-                  color: isActive ? '#fff' : '#4a5568',
-                  border: isActive ? 'none' : '1.5px solid #2a3a4e',
-                }}>
-                <AccountIcon type={account.type} className="w-4 h-4" />
-              </span>
-              <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[9px] font-bold whitespace-nowrap transition-all duration-300 max-w-[60px] truncate"
-                style={{ color: isActive ? accent : '#4a5568', opacity: isActive ? 1 : 0.6 }}>
-                {account.name}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+                background: isActive && isCenter
+                  ? `linear-gradient(135deg, ${accent}, ${accent}cc)`
+                  : 'rgba(26,35,50,0.95)',
+                boxShadow: isActive && isCenter
+                  ? `0 0 18px 4px ${accent}66, 0 4px 12px rgba(0,0,0,0.3)`
+                  : '0 2px 8px rgba(0,0,0,0.25)',
+                color: isActive && isCenter ? '#fff' : '#4a5568',
+                border: isActive && isCenter ? 'none' : '1.5px solid #2a3a4e',
+              }}
+            >
+              <AccountIcon type={acct.type} logo={acct.logo} className="w-4 h-4" />
+            </span>
 
-      {/* Overflow picker sheet */}
-      {pickerOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-end justify-center"
-          onClick={() => setPickerOpen(false)}>
-          <div className="bg-[#1a2332] rounded-t-3xl w-full max-w-lg p-5 animate-slide-in" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-white text-sm font-bold">All Accounts</p>
-              <button onClick={() => setPickerOpen(false)} className="w-7 h-7 rounded-full bg-[#2a3a4e] flex items-center justify-center">
-                <X className="w-3.5 h-3.5 text-[#8a9bb0]" />
-              </button>
-            </div>
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {accounts.map(account => {
-                const isActive = account.id === activeId;
-                const accent   = account.accent || '#4a9eff';
-                return (
-                  <button key={account.id} onClick={() => { onSwitch(account); setPickerOpen(false); }}
-                    className="w-full flex items-center gap-3 p-3 rounded-xl transition-all active:scale-[0.98]"
-                    style={{ background: isActive ? `${accent}22` : 'rgba(42,58,78,0.5)', border: isActive ? `1px solid ${accent}44` : '1px solid transparent' }}>
-                    <span className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-                      style={{ background: isActive ? `linear-gradient(135deg, ${accent}, ${accent}cc)` : 'rgba(26,35,50,0.95)', color: isActive ? '#fff' : '#4a5568' }}>
-                      <AccountIcon type={account.type} className="w-4 h-4" />
-                    </span>
-                    <div className="flex-1 text-left">
-                      <p className="text-white text-sm font-semibold">{account.name}</p>
-                      <p className="text-[#8a9bb0] text-xs capitalize">{account.type}</p>
-                    </div>
-                    {isActive && <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: accent }} />}
-                  </button>
-                );
-              })}
-            </div>
-            <button onClick={() => { setPickerOpen(false); onAdd(); }}
-              className="w-full mt-3 py-3 rounded-xl border border-dashed border-[#4a5568] text-[#8a9bb0] text-sm font-semibold flex items-center justify-center gap-2 active:scale-[0.98] transition-transform">
-              <Plus className="w-4 h-4" /> Add New Account
-            </button>
-          </div>
-        </div>
-      )}
-    </>
+            <span
+              className="absolute left-1/2 -translate-x-1/2 text-[9px] font-bold whitespace-nowrap max-w-[60px] truncate"
+              style={{
+                top: 50,
+                color: isActive && isCenter ? accent : '#4a5568',
+                opacity: isCenter ? 1 : 0.5,
+                textShadow: isActive && isCenter ? `0 0 8px ${accent}88` : 'none',
+              }}
+            >
+              {acct.name}
+            </span>
+          </button>
+        );
+      })}
+
+      <button
+        onClick={onAdd}
+        className="absolute flex items-center justify-center w-7 h-7 rounded-full active:scale-90 transition-transform"
+        style={{
+          right: 12, bottom: 8,
+          background: 'rgba(20,30,43,0.9)',
+          border: '1.5px dashed #3a4e62',
+          color: '#4a5568',
+          zIndex: 20,
+        }}
+      >
+        <Plus className="w-3 h-3" />
+      </button>
+    </div>
   );
 };
 

@@ -62,33 +62,39 @@ export default function AccountGoldHistory({ onUpdate }) {
 
   return (
     <div className="min-h-screen bg-[#f4f6f8] dark:bg-[#0d1117]">
-      <div className="bg-[#1a2332] dark:bg-[#0d1117] px-4 pt-5 pb-5">
+      <div className="px-4 pt-5 pb-4" style={{ background: `linear-gradient(135deg, ${accent}ee, ${accent}99)` }}>
         <div className="flex items-center gap-3">
           <button onClick={() => navigate(`/account/${accountId}`)}
-            className="w-8 h-8 rounded-xl bg-[#2a3a4e] flex items-center justify-center active:scale-95 transition-transform">
-            <ArrowLeft className="w-4 h-4 text-[#8a9bb0]" />
+            className="w-8 h-8 rounded-xl flex items-center justify-center active:scale-95 transition-transform"
+            style={{ background: 'rgba(255,255,255,0.2)' }}>
+            <ArrowLeft className="w-4 h-4 text-white" />
           </button>
           <div>
             <h1 className="text-white text-base font-bold">Gold History</h1>
-            <p className="text-[#8a9bb0] text-xs">{account?.name || 'Gold Account'}</p>
+            <p className="text-white/60 text-xs">{account?.name || 'Gold Account'}</p>
           </div>
         </div>
       </div>
 
       <div className="px-4 pt-4 space-y-3 pb-6">
         <div className="grid grid-cols-2 gap-2">
-          <div className="bg-[#1a2332] rounded-xl p-3 flex items-center gap-2">
-            <TrendingUp className="w-4 h-4" style={{ color: accent }} />
+          <div className="rounded-xl p-3 flex items-center gap-2"
+            style={{ background: `${accent}15`, border: `1px solid ${accent}25` }}>
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${accent}25` }}>
+              <TrendingUp className="w-4 h-4" style={{ color: accent }} />
+            </div>
             <div>
-              <p className="text-[#8a9bb0] text-[9px] uppercase tracking-wider">Bought</p>
-              <p className="text-white text-xs font-black">{totalBought.toFixed(3)}g</p>
+              <p className="text-gray-400 dark:text-[#8a9bb0] text-[9px] uppercase tracking-wider">Bought</p>
+              <p className="text-gray-900 dark:text-white text-xs font-black">{totalBought.toFixed(3)}g</p>
             </div>
           </div>
-          <div className="bg-[#1a2332] rounded-xl p-3 flex items-center gap-2">
-            <TrendingDown className="w-4 h-4 text-[#f87171]" />
+          <div className="bg-white dark:bg-[#1a2332] rounded-xl p-3 flex items-center gap-2 border border-gray-100 dark:border-[#1e2a38]">
+            <div className="w-8 h-8 rounded-lg bg-red-50 dark:bg-[#3a1a1a] flex items-center justify-center">
+              <TrendingDown className="w-4 h-4 text-[#f87171]" />
+            </div>
             <div>
-              <p className="text-[#8a9bb0] text-[9px] uppercase tracking-wider">Sold</p>
-              <p className="text-white text-xs font-black">{totalSold.toFixed(3)}g</p>
+              <p className="text-gray-400 dark:text-[#8a9bb0] text-[9px] uppercase tracking-wider">Sold</p>
+              <p className="text-gray-900 dark:text-white text-xs font-black">{totalSold.toFixed(3)}g</p>
             </div>
           </div>
         </div>
@@ -118,14 +124,15 @@ export default function AccountGoldHistory({ onUpdate }) {
             </div>
           ) : (
             filtered.map((t, i) => (
-              <div key={t.id} className="bg-white dark:bg-[#161d27] rounded-xl border border-[#e8ecf0] dark:border-[#1e2a38] p-3 flex items-center gap-3 animate-card-in" style={{ animationDelay: `${i * 0.03}s` }}>
+              <div key={t.id} className="bg-white dark:bg-[#161d27] rounded-xl p-3 flex items-center gap-3 animate-card-in"
+                style={{ border: `1px solid ${accent}18`, animationDelay: `${Math.min(i,8) * 0.03}s` }}>
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${accent}22` }}>
                   {t.txType === 'purchase'
                     ? <TrendingUp className="w-4 h-4" style={{ color: accent }} />
                     : <TrendingDown className="w-4 h-4 text-[#f87171]" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-[#2d3748] dark:text-[#c8d8e8]">
+                  <p className="text-xs font-semibold text-gray-800 dark:text-[#c8d8e8]">
                     {t.txType === 'purchase' ? 'Bought' : 'Sold'} {parseFloat(t.grams || 0).toFixed(3)}g
                   </p>
                   <p className="text-[10px] text-[#8a9bb0]">

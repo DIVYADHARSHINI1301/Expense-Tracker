@@ -5,17 +5,26 @@ import { useNavigate } from 'react-router-dom';
 import { acctGetPurchases, acctGetSales } from '../firebase/accountFirestore';
 import GlowLoader from './GlowLoader';
 
+const darken = (hex, amt = 40) => {
+  const n = parseInt(hex.replace('#', ''), 16);
+  const r = Math.max(0, (n >> 16) - amt);
+  const g = Math.max(0, ((n >> 8) & 0xff) - amt);
+  const b = Math.max(0, (n & 0xff) - amt);
+  return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+};
+
 export default function GenericGoldDashboard({ account, refreshTrigger }) {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
-  const [purchases, setPurchases] = useState([]);
-  const [sales,     setSales]     = useState([]);
-  const [loading,   setLoading]   = useState(true);
+  const [purchases,  setPurchases]  = useState([]);
+  const [sales,      setSales]      = useState([]);
+  const [loading,    setLoading]    = useState(true);
   const [balVisible, setBalVisible] = useState(true);
-  const [selected,  setSelected]  = useState(null);
+  const [selected,   setSelected]   = useState(null);
   const [dateFilter, setDateFilter] = useState('');
 
-  const accent = account.accent || '#f59e0b';
+  const accent  = account.accent || '#f59e0b';
+  const accentD = darken(accent, 35);
 
   useEffect(() => {
     if (!currentUser || !account?.id) return;
@@ -32,8 +41,8 @@ export default function GenericGoldDashboard({ account, refreshTrigger }) {
 
   if (loading) return <GlowLoader label={`Loading ${account.name}...`} />;
 
-  const totalInvested  = purchases.reduce((s, p) => s + parseFloat(p.amount || 0), 0);
-  const totalSold      = sales.reduce((s, s2) => s + parseFloat(s2.amount || 0), 0);
+  const totalInvested   = purchases.reduce((s, p) => s + parseFloat(p.amount || 0), 0);
+  const totalSold       = sales.reduce((s, s2) => s + parseFloat(s2.amount || 0), 0);
   const totalGoldBought = purchases.reduce((s, p) => s + parseFloat(p.grams || 0), 0);
   const totalGoldSold   = sales.reduce((s, s2) => s + parseFloat(s2.grams || 0), 0);
   const currentHolding  = totalGoldBought - totalGoldSold;
@@ -44,26 +53,28 @@ export default function GenericGoldDashboard({ account, refreshTrigger }) {
     ...sales.map(s => ({ ...s, txType: 'sale' })),
   ].sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  const recent = (dateFilter ? all.filter(t => t.date?.startsWith(dateFilter)) : all).slice(0, 5);
+  const recent = (dateFilter ? all.filter(t => t.date?.startsWith(dateFilter)) : all).slice(0, 3);
 
   return (
-    <div className="min-h-screen bg-white dark:bg-[#0a1929] pb-6 animate-fade-in">
+    <div className="min-h-screen pb-6 animate-fade-in" style={{ background: '#f4f6f8' }}>
 
-      {/* Header */}
-      <div className="relative px-5 pt-8 pb-24 overflow-hidden"
-        style={{ background: `linear-gradient(135deg, ${accent}ee, ${accent}99)` }}>
+      {/* Header — STICKY with full accent gradient */}
+      <div className="sticky top-0 z-40 relative px-5 pt-8 pb-24 overflow-hidden shadow-lg transition-shadow duration-300"
+        style={{ background: `linear-gradient(135deg, ${accent}, ${accentD})` }}>
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
         <div className="relative z-10">
           <div className="flex items-center justify-between mb-8">
             <div>
-              <p className="text-white/70 text-xs font-medium mb-1">Gold Savings</p>
+              <p className="text-white/60 text-xs font-medium mb-1">Gold Savings</p>
               <h1 className="text-white text-xl font-bold">{account.name}</h1>
             </div>
-            <div className="w-11 h-11 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+            <button onClick={() => navigate('/profile')}
+              className="w-11 h-11 rounded-full flex items-center justify-center active:scale-90 transition-transform"
+              style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)' }}>
               <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
                 <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
               </svg>
-            </div>
+            </button>
           </div>
 
           {/* Balance card */}
@@ -71,7 +82,7 @@ export default function GenericGoldDashboard({ account, refreshTrigger }) {
             <div className="flex items-center justify-between mb-4">
               <span className="text-gray-600 dark:text-gray-400 text-xs font-semibold uppercase tracking-wider">Gold Holdings</span>
               <button onClick={() => setBalVisible(!balVisible)}
-                className="w-8 h-8 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                className="w-8 h-8 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center active:scale-90 transition-transform">
                 {balVisible ? <Eye className="w-4 h-4 text-gray-600 dark:text-gray-400" /> : <EyeOff className="w-4 h-4 text-gray-600 dark:text-gray-400" />}
               </button>
             </div>
@@ -81,18 +92,21 @@ export default function GenericGoldDashboard({ account, refreshTrigger }) {
                 {balVisible ? `${currentHolding.toFixed(3)}g` : '••••g'}
               </h2>
             </div>
-            <p className={`text-sm font-semibold mb-6 ${netValue >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+            <p className={`text-sm font-semibold mb-6 ${netValue >= 0 ? '' : 'text-red-500'}`}
+              style={netValue >= 0 ? { color: accent } : {}}>
               Net P&L: {netValue >= 0 ? '+' : ''}₹{netValue.toFixed(2)}
             </p>
             <div className="flex items-center gap-3">
-              <div className="flex-1 rounded-2xl p-4 shadow-lg" style={{ background: `linear-gradient(135deg, ${accent}, ${accent}99)` }}>
+              <div className="flex-1 rounded-2xl p-4 shadow-lg"
+                style={{ background: `linear-gradient(135deg, ${accent}, ${accentD})` }}>
                 <div className="flex items-center gap-1.5 mb-2">
                   <TrendingUp className="w-3.5 h-3.5 text-white" />
                   <span className="text-white text-xs font-semibold">Invested</span>
                 </div>
                 <p className="text-white text-lg font-bold">₹{totalInvested.toFixed(2)}</p>
               </div>
-              <div className="flex-1 rounded-2xl p-4 shadow-lg" style={{ background: `linear-gradient(135deg, ${accent}88, ${accent}55)` }}>
+              <div className="flex-1 rounded-2xl p-4 shadow-lg"
+                style={{ background: `${accent}44` }}>
                 <div className="flex items-center gap-1.5 mb-2">
                   <TrendingDown className="w-3.5 h-3.5 text-white" />
                   <span className="text-white text-xs font-semibold">Sold</span>
@@ -104,7 +118,7 @@ export default function GenericGoldDashboard({ account, refreshTrigger }) {
         </div>
         <div className="absolute bottom-0 left-0 right-0">
           <svg viewBox="0 0 1440 120" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full">
-            <path d="M0 0L60 10C120 20 240 40 360 46.7C480 53 600 47 720 43.3C840 40 960 40 1080 46.7C1200 53 1320 67 1380 73.3L1440 80V120H0V0Z" fill="currentColor" className="text-white dark:text-[#0a1929]"/>
+            <path d="M0 0L60 10C120 20 240 40 360 46.7C480 53 600 47 720 43.3C840 40 960 40 1080 46.7C1200 53 1320 67 1380 73.3L1440 80V120H0V0Z" className="text-[#f4f6f8] dark:text-[#0a1929]" fill="currentColor"/>
           </svg>
         </div>
       </div>
@@ -118,8 +132,8 @@ export default function GenericGoldDashboard({ account, refreshTrigger }) {
             { label: 'History',   path: `/account/${account.id}/history`, Icon: Clock        },
           ].map(({ label, path, Icon }) => (
             <button key={path} onClick={() => navigate(path)}
-              className="touch-btn flex-1 rounded-2xl p-4 shadow-lg"
-              style={{ background: `linear-gradient(135deg, ${accent}, ${accent}99)` }}>
+              className="touch-btn flex-1 rounded-2xl p-4 shadow-lg active:scale-95 transition-transform"
+              style={{ background: `linear-gradient(135deg, ${accent}, ${accentD})` }}>
               <Icon className="w-7 h-7 mb-2 text-white" />
               <p className="text-white text-sm font-bold">{label}</p>
             </button>
@@ -130,11 +144,13 @@ export default function GenericGoldDashboard({ account, refreshTrigger }) {
       {/* Stats */}
       <div className="px-5 mb-6">
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white dark:bg-[#1e293b] rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-800">
+          <div className="bg-white dark:bg-[#1e293b] rounded-2xl p-4 shadow-sm"
+            style={{ border: `1px solid ${accent}22` }}>
             <p className="text-gray-500 dark:text-gray-400 text-xs font-medium mb-1">Total Bought</p>
             <p className="text-gray-900 dark:text-white text-lg font-bold">{totalGoldBought.toFixed(3)}g</p>
           </div>
-          <div className="bg-white dark:bg-[#1e293b] rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-800">
+          <div className="bg-white dark:bg-[#1e293b] rounded-2xl p-4 shadow-sm"
+            style={{ border: `1px solid ${accent}22` }}>
             <p className="text-gray-500 dark:text-gray-400 text-xs font-medium mb-1">Total Sold</p>
             <p className="text-gray-900 dark:text-white text-lg font-bold">{totalGoldSold.toFixed(3)}g</p>
           </div>
@@ -149,7 +165,7 @@ export default function GenericGoldDashboard({ account, refreshTrigger }) {
             <h3 className="text-gray-900 dark:text-white text-base font-bold">Recent Activity</h3>
           </div>
           <button onClick={() => navigate(`/account/${account.id}/history`)}
-            className="flex items-center gap-1 text-xs font-semibold" style={{ color: accent }}>
+            className="flex items-center gap-1 text-xs font-semibold active:scale-90 transition-transform" style={{ color: accent }}>
             See All <ChevronRight className="w-4 h-4" />
           </button>
         </div>
@@ -157,9 +173,10 @@ export default function GenericGoldDashboard({ account, refreshTrigger }) {
         <div className="mb-4 relative">
           <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
           <input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)}
-            className="w-full pl-10 pr-10 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-[#1e293b] text-gray-900 dark:text-white" />
+            className="w-full pl-10 pr-10 py-3 rounded-xl bg-white dark:bg-[#1e293b] text-gray-900 dark:text-white focus:outline-none transition-colors"
+            style={{ border: `2px solid ${accent}44` }} />
           {dateFilter && (
-            <button onClick={() => setDateFilter('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+            <button onClick={() => setDateFilter('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 active:scale-90 transition-transform">
               <X className="w-5 h-5" />
             </button>
           )}
@@ -167,28 +184,25 @@ export default function GenericGoldDashboard({ account, refreshTrigger }) {
 
         <div className="space-y-3">
           {recent.length === 0 ? (
-            <div className="bg-white dark:bg-[#1e293b] rounded-2xl p-8 text-center shadow-sm border border-gray-100 dark:border-gray-800">
+            <div className="bg-white dark:bg-[#1e293b] rounded-2xl p-8 text-center shadow-sm"
+              style={{ border: `1px solid ${accent}22` }}>
               <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">No gold transactions yet</p>
             </div>
           ) : (
             recent.map((tx, i) => (
               <div key={i} onClick={() => setSelected(tx)}
-                className="touch-card bg-white dark:bg-[#1e293b] rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-800 cursor-pointer animate-slide-in"
-                style={{ animationDelay: `${i * 0.05}s` }}>
+                className="touch-card bg-white dark:bg-[#1e293b] rounded-2xl p-4 shadow-sm cursor-pointer animate-slide-in active:scale-[0.99] transition-transform"
+                style={{ border: `1px solid ${accent}22`, animationDelay: `${i * 0.05}s` }}>
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-xl flex items-center justify-center"
-                    style={{ background: `linear-gradient(135deg, ${accent}, ${accent}88)` }}>
+                    style={{ background: `linear-gradient(135deg, ${accent}, ${accentD})` }}>
                     {tx.txType === 'purchase'
                       ? <TrendingUp className="w-6 h-6 text-white" />
                       : <TrendingDown className="w-6 h-6 text-white" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-gray-900 dark:text-white font-semibold text-sm truncate">
-                      {tx.txType === 'purchase' ? 'Gold Purchase' : 'Gold Sale'} — {parseFloat(tx.grams || 0).toFixed(3)}g
-                    </p>
-                    <p className="text-gray-500 dark:text-gray-400 text-xs">
-                      {new Date(tx.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                      {tx.rate ? ` · ₹${parseFloat(tx.rate).toFixed(0)}/g` : ''}
+                      {tx.txType === 'purchase' ? 'Gold Purchase' : 'Gold Sale'}
                     </p>
                   </div>
                   <p className="text-base font-bold" style={{ color: accent }}>
@@ -202,11 +216,12 @@ export default function GenericGoldDashboard({ account, refreshTrigger }) {
       </div>
 
       {selected && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setSelected(null)}>
-          <div className="bg-white dark:bg-[#1e293b] rounded-3xl max-w-md w-full shadow-2xl animate-pop-in" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setSelected(null)}>
+          <div className="bg-white dark:bg-[#1e293b] rounded-3xl max-w-sm w-full shadow-2xl animate-pop-in" onClick={e => e.stopPropagation()}>
+            <div className="h-1.5 rounded-t-3xl" style={{ background: `linear-gradient(90deg, ${accent}, ${accentD})` }} />
             <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Transaction Details</h2>
-              <button onClick={() => setSelected(null)} className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Transaction Details</h2>
+              <button onClick={() => setSelected(null)} className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center active:scale-90 transition-transform">
                 <X className="w-5 h-5 text-gray-600 dark:text-gray-400" />
               </button>
             </div>
@@ -221,7 +236,10 @@ export default function GenericGoldDashboard({ account, refreshTrigger }) {
               ].map(([label, value]) => (
                 <div key={label} className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
                   <span className="text-sm font-semibold text-gray-500 dark:text-gray-400">{label}</span>
-                  <span className="text-sm text-gray-900 dark:text-white font-medium">{value}</span>
+                  <span className="text-sm text-gray-900 dark:text-white font-medium"
+                    style={label === 'Amount' ? { color: accent } : {}}>
+                    {value}
+                  </span>
                 </div>
               ))}
             </div>

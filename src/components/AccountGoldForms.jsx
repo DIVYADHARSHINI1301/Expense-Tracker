@@ -64,15 +64,16 @@ export function AccountBuyGold({ onUpdate }) {
 
   return (
     <div className="min-h-screen bg-[#f4f6f8] dark:bg-[#0d1117]">
-      <div className="bg-[#1a2332] dark:bg-[#0d1117] px-4 pt-5 pb-5">
+      <div className="px-4 pt-5 pb-4" style={{ background: `linear-gradient(135deg, ${accent}ee, ${accent}99)` }}>
         <div className="flex items-center gap-3">
           <button onClick={() => navigate(`/account/${accountId}`)}
-            className="w-8 h-8 rounded-xl bg-[#2a3a4e] flex items-center justify-center active:scale-95 transition-transform">
-            <ArrowLeft className="w-4 h-4 text-[#8a9bb0]" />
+            className="w-8 h-8 rounded-xl flex items-center justify-center active:scale-95 transition-transform"
+            style={{ background: 'rgba(255,255,255,0.2)' }}>
+            <ArrowLeft className="w-4 h-4 text-white" />
           </button>
           <div>
             <h1 className="text-white text-base font-bold">Buy Gold</h1>
-            <p className="text-[#8a9bb0] text-xs">{account?.name || 'Gold Account'}</p>
+            <p className="text-white/60 text-xs">{account?.name || 'Gold Account'}</p>
           </div>
         </div>
       </div>
@@ -188,15 +189,16 @@ export function AccountSellGold({ onUpdate }) {
 
   return (
     <div className="min-h-screen bg-[#f4f6f8] dark:bg-[#0d1117]">
-      <div className="bg-[#1a2332] dark:bg-[#0d1117] px-4 pt-5 pb-5">
+      <div className="px-4 pt-5 pb-4" style={{ background: `linear-gradient(135deg, ${accent}ee, ${accent}99)` }}>
         <div className="flex items-center gap-3">
           <button onClick={() => navigate(`/account/${accountId}`)}
-            className="w-8 h-8 rounded-xl bg-[#2a3a4e] flex items-center justify-center active:scale-95 transition-transform">
-            <ArrowLeft className="w-4 h-4 text-[#8a9bb0]" />
+            className="w-8 h-8 rounded-xl flex items-center justify-center active:scale-95 transition-transform"
+            style={{ background: 'rgba(255,255,255,0.2)' }}>
+            <ArrowLeft className="w-4 h-4 text-white" />
           </button>
           <div>
             <h1 className="text-white text-base font-bold">Sell Gold</h1>
-            <p className="text-[#8a9bb0] text-xs">{account?.name || 'Gold Account'}</p>
+            <p className="text-white/60 text-xs">{account?.name || 'Gold Account'}</p>
           </div>
         </div>
       </div>

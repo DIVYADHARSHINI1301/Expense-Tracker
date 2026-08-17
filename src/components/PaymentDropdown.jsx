@@ -37,21 +37,22 @@ const PaymentDropdown = ({ value, onChange, className = '' }) => {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-4 py-3.5 border-2 border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-[#0ea5e9] focus:border-transparent transition-all bg-white dark:bg-gray-800 flex items-center justify-between hover:border-gray-300 dark:hover:border-gray-500"
+        className="w-full px-3 py-2.5 text-sm rounded-xl bg-[#f8fafc] dark:bg-[#1a2332] border border-[#e8ecf0] dark:border-[#1e2a38] text-[#2d3748] dark:text-[#c8d8e8] focus:outline-none transition-all flex items-center justify-between hover:border-[#d1d8e0] dark:hover:border-[#2a3a4e]"
       >
-        <div className="flex items-center gap-3">
-          <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${selectedMethod.color} flex items-center justify-center`}>
-            <SelectedIcon className="w-5 h-5 text-white" />
+        <div className="flex items-center gap-2">
+          <div className={`w-6 h-6 rounded-lg bg-gradient-to-br ${selectedMethod.color} flex items-center justify-center flex-shrink-0`}>
+            <SelectedIcon className="w-3.5 h-3.5 text-white" />
           </div>
-          <span className="font-semibold text-gray-900 dark:text-white">{selectedMethod.name}</span>
+          <span className="font-semibold text-xs">{selectedMethod.name}</span>
         </div>
-        <ChevronDown className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-4 h-4 text-[#8a9bb0] transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
-      {/* Dropdown Menu */}
+      {/* Dropdown Menu - Fixed positioning to avoid overlap */}
       {isOpen && (
-        <div className="absolute z-50 w-full mt-2 bg-white dark:bg-[#1e293b] border-2 border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl overflow-hidden animate-fade-in">
-          <div className="max-h-80 overflow-y-auto">
+        <div className="absolute left-0 right-0 z-[9999] mt-2 bg-white dark:bg-[#161d27] border border-[#e8ecf0] dark:border-[#1e2a38] rounded-xl shadow-2xl overflow-hidden animate-fade-in"
+          style={{ top: '100%' }}>
+          <div className="p-2 space-y-1 max-h-64 overflow-y-auto">
             {PAYMENT_METHODS.map((method) => {
               const Icon = method.icon;
               return (
@@ -59,24 +60,24 @@ const PaymentDropdown = ({ value, onChange, className = '' }) => {
                   key={method.name}
                   type="button"
                   onClick={() => handleSelect(method)}
-                  className={`w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${
-                    value === method.name ? 'bg-[#0ea5e9]/10 dark:bg-[#0c4a6e]/30' : ''
+                  className={`w-full px-3 py-3 flex items-center gap-3 rounded-lg hover:bg-[#f8fafc] dark:hover:bg-[#1a2332] transition-all duration-200 ${
+                    value === method.name ? 'bg-[#f0f7ff] dark:bg-[#0f1923] border border-[#0ea5e9]/30' : ''
                   }`}
                 >
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center bg-gradient-to-br ${method.color}`}>
-                    <Icon className="w-6 h-6 text-white" />
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center bg-gradient-to-br ${method.color} flex-shrink-0`}>
+                    <Icon className="w-4 h-4 text-white" />
                   </div>
                   <div className="flex-1 text-left">
-                    <p className={`font-semibold ${
+                    <p className={`font-semibold text-sm ${
                       value === method.name 
                         ? 'text-[#0ea5e9] dark:text-[#38bdf8]' 
-                        : 'text-gray-900 dark:text-white'
+                        : 'text-[#2d3748] dark:text-[#c8d8e8]'
                     }`}>
                       {method.name}
                     </p>
                   </div>
                   {value === method.name && (
-                    <div className="w-2 h-2 rounded-full bg-[#0ea5e9] dark:bg-[#38bdf8]"></div>
+                    <div className="w-2 h-2 rounded-full bg-[#0ea5e9] dark:bg-[#38bdf8] animate-pulse flex-shrink-0"></div>
                   )}
                 </button>
               );

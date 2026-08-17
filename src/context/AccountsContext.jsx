@@ -12,8 +12,14 @@ export const ACCOUNT_THEMES = {
 
 // Accent color presets user can pick
 export const ACCENT_PRESETS = [
-  '#4a9eff', '#8b5cf6', '#f59e0b', '#10b981',
-  '#f43f5e', '#06b6d4', '#f97316', '#a855f7',
+  // Blues
+  '#4a9eff', '#0ea5e9', '#3b82f6', '#6366f1',
+  // Purples / Pinks
+  '#8b5cf6', '#a855f7', '#ec4899', '#f43f5e',
+  // Greens
+  '#10b981', '#22c55e', '#84cc16', '#14b8a6',
+  // Warm
+  '#f59e0b', '#f97316', '#ef4444', '#06b6d4',
 ];
 
 const AccountsContext = createContext();
@@ -47,12 +53,13 @@ export const AccountsProvider = ({ children }) => {
 
   useEffect(() => { fetchAccounts(); }, [fetchAccounts]);
 
-  const addAccount = async ({ name, type, accent }) => {
+  const addAccount = async ({ name, type, accent, logo }) => {
     if (!currentUser) return;
     const data = {
       name: name.trim(),
-      type,                          // 'bank' | 'wallet' | 'gold'
+      type,
       accent: accent || ACCOUNT_THEMES[type]?.accent || '#4a9eff',
+      ...(logo ? { logo } : {}),
       createdAt: serverTimestamp(),
     };
     const ref = await addDoc(collection(db, 'users', currentUser.uid, 'accounts'), data);

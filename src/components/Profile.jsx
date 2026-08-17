@@ -28,9 +28,11 @@ const Profile = () => {
   // Account management state
   const { accounts, addAccount, deleteAccount } = useAccounts();
   const [showAddAccount, setShowAddAccount] = useState(false);
-  const [newAcct, setNewAcct] = useState({ name: '', type: 'bank', accent: '#4a9eff' });
+  const [newAcct, setNewAcct] = useState({ name: '', type: 'bank', accent: '#4a9eff', logo: '' });
   const [addingAcct, setAddingAcct] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const logoRef = useRef();
+  const [logoUploading, setLogoUploading] = useState(false);
 
   const name = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'User';
   const initial = name.charAt(0).toUpperCase();
@@ -106,13 +108,26 @@ const Profile = () => {
     finally { setIsClearing(false); }
   };
 
+  const handleLogoChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 1 * 1024 * 1024) { toast.error('Image must be under 1MB'); return; }
+    setLogoUploading(true);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setNewAcct(p => ({ ...p, logo: ev.target.result }));
+      setLogoUploading(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleAddAccount = async () => {
     if (!newAcct.name.trim()) { toast.error('Enter account name'); return; }
     setAddingAcct(true);
     try {
       await addAccount(newAcct);
       toast.success(`${newAcct.name} added!`);
-      setNewAcct({ name: '', type: 'bank', accent: '#4a9eff' });
+      setNewAcct({ name: '', type: 'bank', accent: '#4a9eff', logo: '' });
       setShowAddAccount(false);
     } catch { toast.error('Failed to add account'); }
     finally { setAddingAcct(false); }
@@ -286,9 +301,11 @@ const Profile = () => {
               const TypeIcon = TYPE_ICONS[acct.type] || Building2;
               return (
                 <div key={acct.id} className="bg-white dark:bg-[#1e293b] rounded-2xl p-4 flex items-center gap-3 border border-gray-100 dark:border-gray-800">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden"
                     style={{ backgroundColor: `${acct.accent}22` }}>
-                    <TypeIcon className="w-5 h-5" style={{ color: acct.accent }} />
+                    {acct.logo
+                      ? <img src={acct.logo} alt={acct.name} className="w-full h-full object-cover" />
+                      : <TypeIcon className="w-5 h-5" style={{ color: acct.accent }} />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-gray-900 dark:text-white font-semibold text-sm truncate">{acct.name}</p>
@@ -335,6 +352,41 @@ const Profile = () => {
               </button>
             </div>
 
+            {/* Logo upload (optional) */}
+            <div className="mb-4">
+              <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-2">Account Logo <span className="normal-case font-normal text-gray-400">(optional)</span></p>
+              <div className="flex items-center gap-3">
+                {/* Preview circle */}
+                <div className="w-14 h-14 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0"
+                  style={{ background: newAcct.logo ? 'transparent' : `${newAcct.accent}22`, border: `2px solid ${newAcct.accent}44` }}>
+                  {newAcct.logo
+                    ? <img src={newAcct.logo} alt="logo" className="w-full h-full object-cover" />
+                    : <span className="text-xl" style={{ color: newAcct.accent }}>
+                        {newAcct.type === 'bank' ? '🏦' : newAcct.type === 'wallet' ? '👛' : '⭐'}
+                      </span>}
+                </div>
+                <div className="flex-1">
+                  <button
+                    type="button"
+                    onClick={() => logoRef.current?.click()}
+                    disabled={logoUploading}
+                    className="w-full py-2.5 rounded-xl border-2 border-dashed text-sm font-semibold flex items-center justify-center gap-2 active:scale-95 transition-transform disabled:opacity-60"
+                    style={{ borderColor: `${newAcct.accent}66`, color: newAcct.accent }}>
+                    {logoUploading
+                      ? <><div className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: newAcct.accent }} />Uploading...</>
+                      : <><Camera className="w-4 h-4" />{newAcct.logo ? 'Change Logo' : 'Upload Logo'}</>}
+                  </button>
+                  {newAcct.logo && (
+                    <button type="button" onClick={() => setNewAcct(p => ({ ...p, logo: '' }))}
+                      className="w-full mt-1.5 py-1.5 rounded-xl text-xs font-semibold text-red-400 active:scale-95 transition-transform">
+                      Remove
+                    </button>
+                  )}
+                </div>
+                <input ref={logoRef} type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
+              </div>
+            </div>
+
             {/* Account Name */}
             <div className="mb-4">
               <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-2">Account Name</p>
@@ -369,16 +421,37 @@ const Profile = () => {
             {/* Accent Color */}
             <div className="mb-5">
               <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-2">Accent Color</p>
-              <div className="flex gap-2 flex-wrap">
+              {/* Swatches */}
+              <div className="flex gap-2 flex-wrap mb-3">
                 {ACCENT_PRESETS.map(color => (
                   <button key={color} onClick={() => setNewAcct(p => ({ ...p, accent: color }))}
-                    className="w-8 h-8 rounded-full transition-all active:scale-90"
+                    className="w-8 h-8 rounded-full transition-all active:scale-90 flex-shrink-0"
                     style={{
                       backgroundColor: color,
-                      boxShadow: newAcct.accent === color ? `0 0 0 3px white, 0 0 0 5px ${color}` : 'none',
-                      transform: newAcct.accent === color ? 'scale(1.15)' : 'scale(1)',
+                      boxShadow: newAcct.accent === color ? `0 0 0 2px white, 0 0 0 4px ${color}` : 'none',
+                      transform: newAcct.accent === color ? 'scale(1.18)' : 'scale(1)',
                     }} />
                 ))}
+              </div>
+              {/* Free color picker */}
+              <div className="flex items-center gap-3">
+                <label className="relative cursor-pointer">
+                  <div className="w-10 h-10 rounded-xl border-2 border-gray-200 dark:border-gray-600 overflow-hidden shadow-sm"
+                    style={{ backgroundColor: newAcct.accent }}>
+                    <input type="color" value={newAcct.accent}
+                      onChange={e => setNewAcct(p => ({ ...p, accent: e.target.value }))}
+                      className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+                  </div>
+                </label>
+                <div className="flex-1">
+                  <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Custom color</p>
+                  <p className="text-xs font-mono text-gray-700 dark:text-gray-300 uppercase">{newAcct.accent}</p>
+                </div>
+                {/* Live preview pill */}
+                <div className="px-3 py-1.5 rounded-full text-white text-xs font-bold"
+                  style={{ background: `linear-gradient(135deg, ${newAcct.accent}, ${newAcct.accent}aa)` }}>
+                  Preview
+                </div>
               </div>
             </div>
 
