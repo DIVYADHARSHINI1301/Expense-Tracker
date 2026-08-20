@@ -149,14 +149,14 @@ const SpaceSwitcher = ({ accounts, activeId, onSwitch, onAdd }) => {
 
   if (n === 0) return null;
 
-  // Arc geometry: 3 items on dome curve
+  // Arc geometry: 3 items on upward dome curve
   const R = 75;  // arc radius
   const ANGLES = [-65, 0, 65];  // left, center, right on arc
 
   const getArcPos = (angleDeg) => {
     const rad = (angleDeg * Math.PI) / 180;
     const cx = Math.sin(rad) * R;
-    const cy = Math.cos(rad) * R - R;  // dome shape: center highest
+    const cy = R - Math.cos(rad) * R;  // upward dome: center lowest
     return { cx, cy };
   };
 
@@ -188,20 +188,20 @@ const SpaceSwitcher = ({ accounts, activeId, onSwitch, onAdd }) => {
 
   return (
     <div
-      className="relative flex justify-center items-end select-none"
+      className="relative flex justify-center items-start select-none"
       style={{ height: 130, touchAction: 'none' }}
       onMouseDown={onPointerDown} onMouseMove={onPointerMove}
       onMouseUp={onPointerUp}   onMouseLeave={onPointerUp}
       onTouchStart={onPointerDown} onTouchMove={onPointerMove} onTouchEnd={onPointerUp}
     >
-      {/* Arc guide curve */}
+      {/* Arc guide curve - upward dome */}
       <svg
         className="absolute pointer-events-none"
-        style={{ top: 0, left: '50%', transform: 'translateX(-50%)' }}
+        style={{ bottom: 0, left: '50%', transform: 'translateX(-50%)' }}
         width="220" height="110" viewBox="0 0 220 110"
       >
         <path
-          d="M 20 100 Q 110 10 200 100"
+          d="M 20 10 Q 110 100 200 10"
           fill="none"
           stroke="rgba(74,85,104,0.12)"
           strokeWidth="2"
@@ -269,7 +269,7 @@ const SpaceSwitcher = ({ accounts, activeId, onSwitch, onAdd }) => {
             <span
               className="absolute left-1/2 -translate-x-1/2 text-[9px] font-bold whitespace-nowrap max-w-[60px] truncate"
               style={{
-                top: 50,
+                bottom: -25,
                 color: isActive && isCenter ? accent : '#4a5568',
                 opacity: isCenter ? 1 : 0.5,
                 textShadow: isActive && isCenter ? `0 0 8px ${accent}88` : 'none',
@@ -285,7 +285,7 @@ const SpaceSwitcher = ({ accounts, activeId, onSwitch, onAdd }) => {
         onClick={onAdd}
         className="absolute flex items-center justify-center w-7 h-7 rounded-full active:scale-90 transition-transform"
         style={{
-          right: 12, bottom: 8,
+          right: 12, top: 8,
           background: 'rgba(20,30,43,0.9)',
           border: '1.5px dashed #3a4e62',
           color: '#4a5568',

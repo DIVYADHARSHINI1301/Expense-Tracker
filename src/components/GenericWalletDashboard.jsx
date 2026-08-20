@@ -56,7 +56,7 @@ export default function GenericWalletDashboard({ account, refreshTrigger }) {
     <div className="min-h-screen pb-6 animate-fade-in" style={{ background: '#f4f6f8' }}>
 
       {/* Header — STICKY with full accent gradient */}
-      <div className="sticky top-0 z-40 relative px-5 pt-8 pb-24 overflow-hidden shadow-lg transition-shadow duration-300"
+      <div className="sticky top-0 z-40 relative px-5 pt-8 pb-6 overflow-hidden shadow-lg transition-shadow duration-300"
         style={{ background: `linear-gradient(135deg, ${accent}, ${accentD})` }}>
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
         <div className="relative z-10">
@@ -115,7 +115,7 @@ export default function GenericWalletDashboard({ account, refreshTrigger }) {
       </div>
 
       {/* Quick actions */}
-      <div className="px-5 -mt-16 mb-6 relative z-10">
+      <div className="px-5 mt-0 mb-6 relative z-10">
         <div className="grid grid-cols-2 gap-3">
           {[
             { label: 'Add Income',  path: `/account/${account.id}/add-income`,  Icon: TrendingUp  },

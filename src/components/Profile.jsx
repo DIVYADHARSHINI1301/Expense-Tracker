@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+﻿import { useState, useRef, useEffect } from 'react';
 import { Mail, Phone, Calendar, LogOut, Edit2, Save, ArrowLeft, Trash2, AlertTriangle, Camera, Plus, X, Building2, Wallet, Star } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -340,9 +340,9 @@ const Profile = () => {
 
       {/* Add Account Sheet */}
       {showAddAccount && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end justify-center"
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
           onClick={() => setShowAddAccount(false)}>
-          <div className="bg-white dark:bg-[#1e293b] rounded-t-3xl w-full max-w-lg p-5 animate-slide-in"
+          <div className="bg-white dark:bg-[#1e293b] rounded-3xl w-full max-w-sm max-h-\[90vh\] overflow-y-auto shadow-2xl animate-pop-in"
             onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-gray-900 dark:text-white text-base font-bold">Add New Account</h3>
@@ -507,3 +507,4 @@ const Profile = () => {
 };
 
 export default Profile;
+
