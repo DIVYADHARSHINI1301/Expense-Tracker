@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Plus, Calendar, ArrowLeft, TrendingDown } from 'lucide-react';
+import { Plus, ArrowLeft, TrendingDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAccounts } from '../context/AccountsContext';
 import { acctAddPurchase, acctGetPurchases, acctAddSale, acctGetSales } from '../firebase/accountFirestore';
+import { combineDateAndTime, formatDateTime, formatTime12Hour, getCurrentDateFormatted, getCurrentTimeFormatted } from '../utils/dateUtils';
+import DatePickerInput from './DatePickerInput';
 import GlowLoader from './GlowLoader';
 import toast from 'react-hot-toast';
 
@@ -17,17 +19,28 @@ export function AccountBuyGold({ onUpdate }) {
   const account = accounts.find(a => a.id === accountId);
   const accent  = account?.accent || '#f59e0b';
 
-  const [form, setForm]       = useState({ grams: '', amount: '', rate: '', date: new Date().toISOString().split('T')[0], notes: '' });
-  const [loading, setLoading] = useState(false);
-  const [list, setList]       = useState([]);
+  const [form, setForm] = useState({
+    grams: '',
+    amount: '',
+    rate: '',
+    date: getCurrentDateFormatted(),
+    time: getCurrentTimeFormatted(),
+    notes: '',
+  });
+  const [loading, setLoading]   = useState(false);
+  const [list, setList]         = useState([]);
   const [fetching, setFetching] = useState(true);
 
   const fetchList = async () => {
     if (!currentUser || !accountId) return;
     setFetching(true);
-    try { setList((await acctGetPurchases(currentUser.uid, accountId)).slice(0, 5)); }
-    catch (e) { console.error(e); }
-    finally { setFetching(false); }
+    try {
+      setList((await acctGetPurchases(currentUser.uid, accountId)).slice(0, 5));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setFetching(false);
+    }
   };
 
   useEffect(() => { fetchList(); }, [currentUser, accountId]);
@@ -44,20 +57,33 @@ export function AccountBuyGold({ onUpdate }) {
     if (!form.grams || !form.amount) { toast.error('Enter grams and amount'); return; }
     setLoading(true);
     try {
-      const d = new Date(form.date), now = new Date();
-      d.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
+      const isoDate = combineDateAndTime(form.date, form.time);
+      const timeFormatted = formatTime12Hour(form.time);
+
       await acctAddPurchase(currentUser.uid, accountId, {
         grams: parseFloat(form.grams),
         amount: parseFloat(form.amount),
         rate: form.rate ? parseFloat(form.rate) : null,
-        date: d.toISOString(),
+        date: isoDate,
+        time: timeFormatted,
         notes: form.notes,
       });
       toast.success('Gold purchase recorded');
-      setForm({ grams: '', amount: '', rate: '', date: new Date().toISOString().split('T')[0], notes: '' });
-      fetchList(); onUpdate?.();
-    } catch { toast.error('Failed to add'); }
-    finally { setLoading(false); }
+      setForm({
+        grams: '',
+        amount: '',
+        rate: '',
+        date: getCurrentDateFormatted(),
+        time: getCurrentTimeFormatted(),
+        notes: '',
+      });
+      fetchList();
+      onUpdate?.();
+    } catch {
+      toast.error('Failed to add');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (fetching) return <GlowLoader label="Loading..." />;
@@ -94,15 +120,20 @@ export function AccountBuyGold({ onUpdate }) {
                   className="w-full px-3 py-2.5 text-sm rounded-xl bg-[#f8fafc] dark:bg-[#1a2332] border border-[#e8ecf0] dark:border-[#1e2a38] text-[#2d3748] dark:text-[#c8d8e8] font-bold focus:outline-none transition-colors" />
               </div>
             ))}
-            <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8a9bb0] w-3.5 h-3.5" />
-              <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })}
-                className="w-full pl-9 pr-3 py-2.5 text-sm rounded-xl bg-[#f8fafc] dark:bg-[#1a2332] border border-[#e8ecf0] dark:border-[#1e2a38] text-[#2d3748] dark:text-[#c8d8e8] focus:outline-none transition-colors" />
-            </div>
+
+            {/* Date & Time Picker in DD/MM/YYYY */}
+            <DatePickerInput
+              date={form.date}
+              time={form.time}
+              onDateChange={d => setForm({ ...form, date: d })}
+              onTimeChange={t => setForm({ ...form, time: t })}
+              accent={accent}
+            />
+
             <textarea placeholder="Notes (optional)" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })}
               className="w-full px-3 py-2.5 text-sm rounded-xl bg-[#f8fafc] dark:bg-[#1a2332] border border-[#e8ecf0] dark:border-[#1e2a38] text-[#2d3748] dark:text-[#c8d8e8] resize-none focus:outline-none transition-colors" rows="2" />
             <button type="button" onClick={handleSubmit} disabled={loading}
-              className="w-full text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all disabled:opacity-50"
+              className="w-full text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all disabled:opacity-50 shadow-md"
               style={{ backgroundColor: accent }}>
               <Plus className="w-4 h-4" />
               {loading ? 'Adding...' : 'Record Purchase'}
@@ -121,7 +152,7 @@ export function AccountBuyGold({ onUpdate }) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold text-[#2d3748] dark:text-[#c8d8e8]">{parseFloat(p.grams).toFixed(3)}g</p>
-                  <p className="text-[10px] text-[#8a9bb0]">{new Date(p.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}{p.rate ? ` · ₹${parseFloat(p.rate).toFixed(0)}/g` : ''}</p>
+                  <p className="text-[10px] text-[#8a9bb0]">{formatDateTime(p.date, p.time)}{p.rate ? ` · ₹${parseFloat(p.rate).toFixed(0)}/g` : ''}</p>
                 </div>
                 <p className="text-sm font-black flex-shrink-0" style={{ color: accent }}>₹{parseFloat(p.amount).toLocaleString('en-IN')}</p>
               </div>
@@ -143,17 +174,28 @@ export function AccountSellGold({ onUpdate }) {
   const account = accounts.find(a => a.id === accountId);
   const accent  = account?.accent || '#f59e0b';
 
-  const [form, setForm]       = useState({ grams: '', amount: '', rate: '', date: new Date().toISOString().split('T')[0], notes: '' });
-  const [loading, setLoading] = useState(false);
-  const [list, setList]       = useState([]);
+  const [form, setForm] = useState({
+    grams: '',
+    amount: '',
+    rate: '',
+    date: getCurrentDateFormatted(),
+    time: getCurrentTimeFormatted(),
+    notes: '',
+  });
+  const [loading, setLoading]   = useState(false);
+  const [list, setList]         = useState([]);
   const [fetching, setFetching] = useState(true);
 
   const fetchList = async () => {
     if (!currentUser || !accountId) return;
     setFetching(true);
-    try { setList((await acctGetSales(currentUser.uid, accountId)).slice(0, 5)); }
-    catch (e) { console.error(e); }
-    finally { setFetching(false); }
+    try {
+      setList((await acctGetSales(currentUser.uid, accountId)).slice(0, 5));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setFetching(false);
+    }
   };
 
   useEffect(() => { fetchList(); }, [currentUser, accountId]);
@@ -169,20 +211,33 @@ export function AccountSellGold({ onUpdate }) {
     if (!form.grams || !form.amount) { toast.error('Enter grams and amount'); return; }
     setLoading(true);
     try {
-      const d = new Date(form.date), now = new Date();
-      d.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
+      const isoDate = combineDateAndTime(form.date, form.time);
+      const timeFormatted = formatTime12Hour(form.time);
+
       await acctAddSale(currentUser.uid, accountId, {
         grams: parseFloat(form.grams),
         amount: parseFloat(form.amount),
         rate: form.rate ? parseFloat(form.rate) : null,
-        date: d.toISOString(),
+        date: isoDate,
+        time: timeFormatted,
         notes: form.notes,
       });
       toast.success('Gold sale recorded');
-      setForm({ grams: '', amount: '', rate: '', date: new Date().toISOString().split('T')[0], notes: '' });
-      fetchList(); onUpdate?.();
-    } catch { toast.error('Failed to add'); }
-    finally { setLoading(false); }
+      setForm({
+        grams: '',
+        amount: '',
+        rate: '',
+        date: getCurrentDateFormatted(),
+        time: getCurrentTimeFormatted(),
+        notes: '',
+      });
+      fetchList();
+      onUpdate?.();
+    } catch {
+      toast.error('Failed to add');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (fetching) return <GlowLoader label="Loading..." />;
@@ -219,15 +274,20 @@ export function AccountSellGold({ onUpdate }) {
                   className="w-full px-3 py-2.5 text-sm rounded-xl bg-[#f8fafc] dark:bg-[#1a2332] border border-[#e8ecf0] dark:border-[#1e2a38] text-[#2d3748] dark:text-[#c8d8e8] font-bold focus:outline-none transition-colors" />
               </div>
             ))}
-            <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8a9bb0] w-3.5 h-3.5" />
-              <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })}
-                className="w-full pl-9 pr-3 py-2.5 text-sm rounded-xl bg-[#f8fafc] dark:bg-[#1a2332] border border-[#e8ecf0] dark:border-[#1e2a38] text-[#2d3748] dark:text-[#c8d8e8] focus:outline-none transition-colors" />
-            </div>
+
+            {/* Date & Time Picker in DD/MM/YYYY */}
+            <DatePickerInput
+              date={form.date}
+              time={form.time}
+              onDateChange={d => setForm({ ...form, date: d })}
+              onTimeChange={t => setForm({ ...form, time: t })}
+              accent={accent}
+            />
+
             <textarea placeholder="Notes (optional)" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })}
               className="w-full px-3 py-2.5 text-sm rounded-xl bg-[#f8fafc] dark:bg-[#1a2332] border border-[#e8ecf0] dark:border-[#1e2a38] text-[#2d3748] dark:text-[#c8d8e8] resize-none focus:outline-none transition-colors" rows="2" />
             <button type="button" onClick={handleSubmit} disabled={loading}
-              className="w-full text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all disabled:opacity-50"
+              className="w-full text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all disabled:opacity-50 shadow-md"
               style={{ backgroundColor: accent }}>
               <TrendingDown className="w-4 h-4" />
               {loading ? 'Adding...' : 'Record Sale'}
@@ -244,7 +304,7 @@ export function AccountSellGold({ onUpdate }) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold text-[#2d3748] dark:text-[#c8d8e8]">{parseFloat(s.grams).toFixed(3)}g sold</p>
-                  <p className="text-[10px] text-[#8a9bb0]">{new Date(s.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}{s.rate ? ` · ₹${parseFloat(s.rate).toFixed(0)}/g` : ''}</p>
+                  <p className="text-[10px] text-[#8a9bb0]">{formatDateTime(s.date, s.time)}{s.rate ? ` · ₹${parseFloat(s.rate).toFixed(0)}/g` : ''}</p>
                 </div>
                 <p className="text-sm font-black text-[#4ade80] flex-shrink-0">+₹{parseFloat(s.amount).toLocaleString('en-IN')}</p>
               </div>

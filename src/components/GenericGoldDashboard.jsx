@@ -3,6 +3,7 @@ import { Eye, EyeOff, ChevronRight, Clock, X, Calendar, TrendingUp, TrendingDown
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { acctGetPurchases, acctGetSales } from '../firebase/accountFirestore';
+import { formatDateDDMMYYYY, formatTime12Hour, formatDateTime } from '../utils/dateUtils';
 import GlowLoader from './GlowLoader';
 
 const darken = (hex, amt = 40) => {
@@ -198,6 +199,9 @@ export default function GenericGoldDashboard({ account, refreshTrigger }) {
                     <p className="text-xs font-semibold text-gray-800 dark:text-[#c8d8e8] truncate">
                       {tx.txType === 'purchase' ? 'Gold Purchase' : 'Gold Sale'}
                     </p>
+                    <p className="text-[10px] text-[#8a9bb0]">
+                      {formatDateTime(tx.date, tx.time)}
+                    </p>
                   </div>
                   <p className="text-sm font-black flex-shrink-0"
                     style={{ color: tx.txType === 'purchase' ? accent : '#f87171' }}>
@@ -226,7 +230,8 @@ export default function GenericGoldDashboard({ account, refreshTrigger }) {
                 ['Amount',       `₹${parseFloat(selected.amount).toFixed(2)}`],
                 ['Gold (grams)', `${parseFloat(selected.grams || 0).toFixed(3)}g`],
                 ...(selected.rate  ? [['Rate/gram', `₹${parseFloat(selected.rate).toFixed(2)}`]] : []),
-                ['Date',         new Date(selected.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })],
+                ['Date',         formatDateDDMMYYYY(selected.date)],
+                ['Time',         formatTime12Hour(selected.time || selected.date)],
                 ...(selected.notes ? [['Notes', selected.notes]] : []),
               ].map(([label, value]) => (
                 <div key={label} className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">

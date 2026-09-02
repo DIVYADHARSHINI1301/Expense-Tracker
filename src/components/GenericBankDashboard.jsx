@@ -1,11 +1,14 @@
-import { useState, useEffect } from 'react';
-import { Eye, EyeOff, ChevronRight, Clock, X, Calendar, ArrowUpRight, ArrowDownRight, Wallet } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Eye, EyeOff, ChevronRight, Clock, X, Calendar, ArrowUpRight, ArrowDownRight, Wallet, Edit2, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { acctGetIncome, acctGetExpenses } from '../firebase/accountFirestore';
+import { acctGetIncome, acctGetExpenses, acctDeleteIncome, acctDeleteExpense } from '../firebase/accountFirestore';
+import { calculateRunningBalances, formatDateTime, formatDateDDMMYYYY, formatTime12Hour } from '../utils/dateUtils';
 import CategoryIcon from './CategoryIcons';
 import ActionIcon from './ActionIcons';
+import EditTransactionModal from './EditTransactionModal';
 import GlowLoader from './GlowLoader';
+import toast from 'react-hot-toast';
 
 const darken = (hex, amt = 40) => {
   const n = parseInt(hex.replace('#', ''), 16);
@@ -31,22 +34,31 @@ export default function GenericBankDashboard({ account, refreshTrigger }) {
   const [balVisible, setBalVisible] = useState(true);
   const [selected,   setSelected]   = useState(null);
   const [dateFilter, setDateFilter] = useState('');
+  const [editingTx,  setEditingTx]  = useState(null);
 
   const accent  = account.accent || '#4a9eff';
   const accentD = darken(accent, 35);
 
-  useEffect(() => {
+  const fetchData = useCallback(async () => {
     if (!currentUser || !account?.id) return;
     setLoading(true);
-    Promise.all([
-      acctGetIncome(currentUser.uid, account.id),
-      acctGetExpenses(currentUser.uid, account.id),
-    ]).then(([inc, exp]) => {
+    try {
+      const [inc, exp] = await Promise.all([
+        acctGetIncome(currentUser.uid, account.id),
+        acctGetExpenses(currentUser.uid, account.id),
+      ]);
       setIncomeList(inc);
       setExpenses(exp);
-    }).catch(console.error)
-      .finally(() => setLoading(false));
-  }, [currentUser, account?.id, refreshTrigger]);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [currentUser, account?.id]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData, refreshTrigger]);
 
   if (loading) return <GlowLoader label={`Loading ${account.name}...`} />;
 
@@ -55,21 +67,38 @@ export default function GenericBankDashboard({ account, refreshTrigger }) {
   const balance       = totalIncome - totalExpenses;
   const savingsPct    = totalIncome > 0 ? Math.min(100, ((totalIncome - totalExpenses) / totalIncome) * 100) : 0;
 
-  const all = [
-    ...expenses.map(e  => ({ ...e,  txType: 'expense' })),
-    ...incomeList.map(i => ({ ...i, txType: 'income'  })),
-  ].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const merged = [
+    ...expenses.map(e => ({ ...e, txType: 'expense' })),
+    ...incomeList.map(i => ({ ...i, txType: 'income' })),
+  ];
 
-  const recent = (dateFilter ? all.filter(t => t.date?.startsWith(dateFilter)) : all).slice(0, 3);
+  const all = calculateRunningBalances(merged).sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  const recent = (dateFilter ? all.filter(t => t.date?.startsWith(dateFilter)) : all).slice(0, 5);
+
+  const handleDelete = async (tx) => {
+    if (!window.confirm('Delete this transaction?')) return;
+    try {
+      if (tx.txType === 'income') {
+        await acctDeleteIncome(currentUser.uid, account.id, tx.id);
+      } else {
+        await acctDeleteExpense(currentUser.uid, account.id, tx.id);
+      }
+      toast.success('Deleted');
+      setSelected(null);
+      fetchData();
+    } catch {
+      toast.error('Failed to delete');
+    }
+  };
 
   return (
     <div className="min-h-screen pb-6 animate-fade-in bg-[#f4f6f8] dark:bg-[#0d1117]">
-
       {/* Header — accent gradient, STICKY */}
       <div className="sticky top-0 z-40 px-4 pt-6 pb-5 shadow-lg transition-shadow duration-300" style={{ background: `linear-gradient(135deg, ${accent}, ${accentD})` }}>
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-white/60 text-xs font-medium tracking-wide">
+            <p className="text-white/70 text-xs font-medium tracking-wide">
               {account.name}
             </p>
             <h1 className="text-white text-lg font-bold mt-0.5">
@@ -84,7 +113,7 @@ export default function GenericBankDashboard({ account, refreshTrigger }) {
         </div>
       </div>
 
-      {/* Balance card — with top spacing */}
+      {/* Balance card */}
       <div className="px-4 mt-4">
         <div className="rounded-2xl p-5 animate-card-in bg-white dark:bg-[#1a2332] shadow-sm border border-gray-100 dark:border-[#1e2a38]">
           <div className="flex items-center justify-between mb-1">
@@ -97,7 +126,7 @@ export default function GenericBankDashboard({ account, refreshTrigger }) {
             </button>
           </div>
           <h2 className="text-gray-900 dark:text-white text-3xl font-black tracking-tight mb-4">
-            {balVisible ? `₹${balance.toLocaleString('en-IN')}` : '₹ ••••••'}
+            {balVisible ? `₹${balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '₹ ••••••'}
           </h2>
           <div className="mb-4">
             <div className="flex items-center justify-between mb-1.5">
@@ -169,8 +198,8 @@ export default function GenericBankDashboard({ account, refreshTrigger }) {
         <div className="mb-3 relative">
           <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-3.5 h-3.5" />
           <input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)}
-            className="w-full pl-9 pr-8 py-2.5 text-sm rounded-xl bg-white dark:bg-[#161d27] text-gray-800 dark:text-[#c8d8e8] focus:outline-none transition-colors"
-            style={{ border: `1.5px solid ${accent}30` }} />
+            className="w-full pl-9 pr-8 py-2 text-xs rounded-xl bg-white dark:bg-[#161d27] text-gray-800 dark:text-[#c8d8e8] focus:outline-none transition-colors border border-gray-100 dark:border-[#1e2a38]"
+          />
           {dateFilter && (
             <button onClick={() => setDateFilter('')} className="absolute right-3 top-1/2 -translate-y-1/2 active:scale-90 transition-transform">
               <X className="w-3.5 h-3.5 text-gray-400" />
@@ -180,16 +209,15 @@ export default function GenericBankDashboard({ account, refreshTrigger }) {
 
         <div className="space-y-2">
           {recent.length === 0 ? (
-            <div className="rounded-xl p-8 text-center bg-white dark:bg-[#161d27]"
-              style={{ border: `1px solid ${accent}20` }}>
+            <div className="rounded-xl p-8 text-center bg-white dark:bg-[#161d27] border border-gray-100 dark:border-[#1e2a38]">
               <p className="text-sm font-semibold text-gray-400 dark:text-[#6b7a8d]">No transactions yet</p>
               <p className="text-xs text-gray-400 dark:text-[#8a9bb0] mt-1">Start tracking your finances</p>
             </div>
           ) : (
             recent.map((t, i) => (
-              <div key={i} onClick={() => setSelected(t)}
-                className="rounded-xl overflow-hidden cursor-pointer active:scale-[0.99] transition-transform animate-card-in bg-white dark:bg-[#161d27]"
-                style={{ border: `1px solid ${accent}18`, animationDelay: `${i * 0.04}s` }}>
+              <div key={t.id || i} onClick={() => setSelected(t)}
+                className="rounded-xl overflow-hidden cursor-pointer active:scale-[0.99] transition-transform animate-card-in bg-white dark:bg-[#161d27] border border-[#e8ecf0] dark:border-[#1e2a38] hover:border-[#cbd5e1] dark:hover:border-[#334155]"
+                style={{ animationDelay: `${i * 0.04}s` }}>
                 <div className="flex items-center gap-3 p-3">
                   <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
                     style={{ background: t.txType === 'income' ? `${accent}18` : 'rgba(248,113,113,0.1)' }}>
@@ -199,9 +227,20 @@ export default function GenericBankDashboard({ account, refreshTrigger }) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-gray-800 dark:text-[#c8d8e8] truncate">{t.title || t.source}</p>
+                    <p className="text-[10px] text-[#8a9bb0]">
+                      {formatDateTime(t.date, t.time)}
+                    </p>
+                    {t.runningBalance !== undefined && (
+                      <div className="mt-0.5 flex items-center gap-1">
+                        <span className="text-[9px] font-medium text-[#8a9bb0]">Balance:</span>
+                        <span className={`text-[10px] font-bold ${t.runningBalance >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                          ₹{parseFloat(t.runningBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   <p className="text-sm font-black flex-shrink-0"
-                    style={{ color: t.txType === 'income' ? accent : '#f87171' }}>
+                    style={{ color: t.txType === 'income' ? '#10b981' : '#f87171' }}>
                     {t.txType === 'income' ? '+' : '−'}₹{parseFloat(t.amount).toLocaleString('en-IN')}
                   </p>
                 </div>
@@ -211,33 +250,35 @@ export default function GenericBankDashboard({ account, refreshTrigger }) {
         </div>
       </div>
 
-      {/* Detail modal - CENTER POPUP */}
+      {/* Detail modal */}
       {selected && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setSelected(null)}>
-          <div className="bg-white dark:bg-[#161d27] rounded-3xl w-full max-w-sm shadow-2xl animate-pop-in" onClick={e => e.stopPropagation()}>
-            <div className="h-1.5 rounded-t-3xl" style={{ background: `linear-gradient(90deg, ${accent}, ${accentD})` }} />
+          <div className="bg-white dark:bg-[#161d27] rounded-3xl w-full max-w-sm shadow-2xl animate-pop-in border border-gray-100 dark:border-[#1e2a38] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="h-1.5" style={{ background: `linear-gradient(90deg, ${accent}, ${accentD})` }} />
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-[#1e2a38]">
               <p className="text-sm font-bold text-gray-900 dark:text-white">Transaction Details</p>
               <button onClick={() => setSelected(null)} className="w-7 h-7 rounded-full bg-gray-100 dark:bg-[#1a2332] flex items-center justify-center active:scale-90 transition-transform">
                 <X className="w-3.5 h-3.5 text-gray-400 dark:text-[#6b7a8d]" />
               </button>
             </div>
-            <div className="p-6 space-y-3">
+            <div className="p-5 space-y-2.5">
               {[
-                ['Name',   selected.title || selected.source, ''],
-                ['Type',   selected.txType === 'expense' ? 'Expense' : 'Income', ''],
-                ['Date',   new Date(selected.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }), ''],
-                ['Amount', `₹${parseFloat(selected.amount).toLocaleString('en-IN')}`, 'font-black'],
-                ...(selected.category      ? [['Category', selected.category,      '']] : []),
-                ...(selected.paymentMethod ? [['Payment',  selected.paymentMethod, '']] : []),
-                ...(selected.notes         ? [['Notes',    selected.notes,         'italic']] : []),
+                ['Description', selected.title || selected.source, 'font-semibold'],
+                ['Type',        selected.txType === 'expense' ? 'Expense' : 'Income', 'font-bold'],
+                ['Amount',      `₹${parseFloat(selected.amount).toLocaleString('en-IN')}`, 'font-black'],
+                ['Date',        formatDateDDMMYYYY(selected.date), ''],
+                ['Time',        formatTime12Hour(selected.time || selected.date), ''],
+                ...(selected.runningBalance !== undefined ? [['Balance After', `₹${parseFloat(selected.runningBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'font-bold text-emerald-500']] : []),
+                ...(selected.category      ? [['Category', selected.category, '']] : []),
+                ...(selected.paymentMethod ? [['Payment Mode', selected.paymentMethod, '']] : []),
+                ...(selected.notes         ? [['Notes', selected.notes, 'italic']] : []),
               ].map(([label, value, cls]) => (
-                <div key={label} className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-[#1e2a38] last:border-0">
+                <div key={label} className="flex items-center justify-between py-1.5 border-b border-gray-100 dark:border-[#1e2a38] last:border-0">
                   <span className="text-xs font-semibold text-gray-400 dark:text-[#8a9bb0]">{label}</span>
                   <span className={`text-xs text-gray-800 dark:text-[#c8d8e8] ${cls}`}
                     style={
-                      label === 'Amount' ? { color: accent } :
-                      label === 'Type' && selected.txType === 'income' ? { color: accent } :
+                      label === 'Amount' ? { color: selected.txType === 'income' ? '#10b981' : '#f87171' } :
+                      label === 'Type' && selected.txType === 'income' ? { color: '#10b981' } :
                       label === 'Type' && selected.txType === 'expense' ? { color: '#f87171' } : {}
                     }>
                     {value}
@@ -245,8 +286,48 @@ export default function GenericBankDashboard({ account, refreshTrigger }) {
                 </div>
               ))}
             </div>
+
+            {/* Quick Actions in Detail View: Edit & Delete */}
+            <div className="p-4 border-t border-gray-100 dark:border-[#1e2a38] flex gap-2">
+              <button
+                onClick={() => handleDelete(selected)}
+                className="px-3 py-2 rounded-xl bg-red-50 dark:bg-[#3a1a1a] text-red-500 font-bold text-xs flex items-center justify-center gap-1 active:scale-95"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => {
+                  const toEdit = selected;
+                  setSelected(null);
+                  setEditingTx(toEdit);
+                }}
+                className="flex-1 py-2 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95 shadow-sm"
+                style={{ backgroundColor: accent }}
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+                Edit Transaction
+              </button>
+            </div>
           </div>
         </div>
+      )}
+
+      {/* Edit Modal */}
+      {editingTx && (
+        <EditTransactionModal
+          isOpen={!!editingTx}
+          onClose={() => setEditingTx(null)}
+          transaction={editingTx}
+          accountId={account.id}
+          accountType={account.type}
+          accent={accent}
+          onSuccess={() => {
+            fetchData();
+          }}
+          onDeleteSuccess={() => {
+            fetchData();
+          }}
+        />
       )}
     </div>
   );

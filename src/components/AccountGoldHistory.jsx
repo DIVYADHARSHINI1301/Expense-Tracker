@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAccounts } from '../context/AccountsContext';
 import { acctGetPurchases, acctGetSales, acctDeletePurchase, acctDeleteSale } from '../firebase/accountFirestore';
+import { formatDateTime, formatDateDDMMYYYY } from '../utils/dateUtils';
 import GlowLoader from './GlowLoader';
 import toast from 'react-hot-toast';
 
@@ -136,7 +137,7 @@ export default function AccountGoldHistory({ onUpdate }) {
                     {t.txType === 'purchase' ? 'Bought' : 'Sold'} {parseFloat(t.grams || 0).toFixed(3)}g
                   </p>
                   <p className="text-[10px] text-[#8a9bb0]">
-                    {new Date(t.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    {formatDateTime(t.date, t.time)}
                     {t.rate ? ` · ₹${parseFloat(t.rate).toFixed(0)}/g` : ''}
                   </p>
                 </div>

@@ -1,9 +1,12 @@
-import { useState, useEffect } from 'react';
-import { Eye, EyeOff, ChevronRight, Clock, X, Calendar, TrendingUp, TrendingDown, BarChart3 } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Eye, EyeOff, ChevronRight, Clock, X, Calendar, TrendingUp, TrendingDown, BarChart3, Edit2, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { acctGetIncome, acctGetExpenses } from '../firebase/accountFirestore';
+import { acctGetIncome, acctGetExpenses, acctDeleteIncome, acctDeleteExpense } from '../firebase/accountFirestore';
+import { calculateRunningBalances, formatDateTime, formatDateDDMMYYYY, formatTime12Hour } from '../utils/dateUtils';
+import EditTransactionModal from './EditTransactionModal';
 import GlowLoader from './GlowLoader';
+import toast from 'react-hot-toast';
 
 const darken = (hex, amt = 40) => {
   const n = parseInt(hex.replace('#', ''), 16);
@@ -22,22 +25,31 @@ export default function GenericWalletDashboard({ account, refreshTrigger }) {
   const [balVisible, setBalVisible] = useState(true);
   const [selected,   setSelected]   = useState(null);
   const [dateFilter, setDateFilter] = useState('');
+  const [editingTx,  setEditingTx]  = useState(null);
 
   const accent  = account.accent || '#8b5cf6';
   const accentD = darken(accent, 35);
 
-  useEffect(() => {
+  const fetchData = useCallback(async () => {
     if (!currentUser || !account?.id) return;
     setLoading(true);
-    Promise.all([
-      acctGetIncome(currentUser.uid, account.id),
-      acctGetExpenses(currentUser.uid, account.id),
-    ]).then(([inc, exp]) => {
+    try {
+      const [inc, exp] = await Promise.all([
+        acctGetIncome(currentUser.uid, account.id),
+        acctGetExpenses(currentUser.uid, account.id),
+      ]);
       setIncomeList(inc);
       setExpenses(exp);
-    }).catch(console.error)
-      .finally(() => setLoading(false));
-  }, [currentUser, account?.id, refreshTrigger]);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [currentUser, account?.id]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData, refreshTrigger]);
 
   if (loading) return <GlowLoader label={`Loading ${account.name}...`} />;
 
@@ -45,22 +57,39 @@ export default function GenericWalletDashboard({ account, refreshTrigger }) {
   const totalExpenses = expenses.reduce((s, e) => s + parseFloat(e.amount || 0), 0);
   const balance       = totalIncome - totalExpenses;
 
-  const all = [
-    ...expenses.map(e  => ({ ...e,  txType: 'expense' })),
-    ...incomeList.map(i => ({ ...i, txType: 'income'  })),
-  ].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const merged = [
+    ...expenses.map(e => ({ ...e, txType: 'expense' })),
+    ...incomeList.map(i => ({ ...i, txType: 'income' })),
+  ];
 
-  const recent = (dateFilter ? all.filter(t => t.date?.startsWith(dateFilter)) : all).slice(0, 3);
+  const all = calculateRunningBalances(merged).sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  const recent = (dateFilter ? all.filter(t => t.date?.startsWith(dateFilter)) : all).slice(0, 5);
+
+  const handleDelete = async (tx) => {
+    if (!window.confirm('Delete this transaction?')) return;
+    try {
+      if (tx.txType === 'income') {
+        await acctDeleteIncome(currentUser.uid, account.id, tx.id);
+      } else {
+        await acctDeleteExpense(currentUser.uid, account.id, tx.id);
+      }
+      toast.success('Deleted');
+      setSelected(null);
+      fetchData();
+    } catch {
+      toast.error('Failed to delete');
+    }
+  };
 
   return (
     <div className="min-h-screen pb-6 animate-fade-in bg-[#f4f6f8] dark:bg-[#0d1117]">
-
       {/* Header — compact sticky */}
       <div className="sticky top-0 z-40 px-4 pt-4 pb-4 shadow-md"
         style={{ background: `linear-gradient(135deg, ${accent}, ${accentD})` }}>
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-white/60 text-[10px] font-medium uppercase tracking-wide">Cash / Wallet</p>
+            <p className="text-white/70 text-[10px] font-medium uppercase tracking-wide">Cash / Wallet</p>
             <h1 className="text-white text-base font-bold leading-tight">{account.name}</h1>
           </div>
           <button onClick={() => navigate('/profile')}
@@ -85,7 +114,7 @@ export default function GenericWalletDashboard({ account, refreshTrigger }) {
             </button>
           </div>
           <h2 className="text-gray-900 dark:text-white text-2xl font-black tracking-tight mb-3">
-            {balVisible ? `₹${balance.toFixed(2)}` : '₹ ••••••'}
+            {balVisible ? `₹${balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '₹ ••••••'}
           </h2>
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-xl p-3 flex items-center gap-2"
@@ -93,7 +122,7 @@ export default function GenericWalletDashboard({ account, refreshTrigger }) {
               <TrendingUp className="w-4 h-4 flex-shrink-0" style={{ color: accent }} />
               <div>
                 <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-400 dark:text-[#8a9bb0]">Income</p>
-                <p className="text-xs font-black text-gray-900 dark:text-white">₹{totalIncome.toFixed(2)}</p>
+                <p className="text-xs font-black text-gray-900 dark:text-white">₹{totalIncome.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
               </div>
             </div>
             <div className="rounded-xl p-3 flex items-center gap-2 bg-red-50 dark:bg-[#0f1923]"
@@ -101,7 +130,7 @@ export default function GenericWalletDashboard({ account, refreshTrigger }) {
               <TrendingDown className="w-4 h-4 text-[#f87171] flex-shrink-0" />
               <div>
                 <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-400 dark:text-[#8a9bb0]">Expense</p>
-                <p className="text-xs font-black text-gray-900 dark:text-white">₹{totalExpenses.toFixed(2)}</p>
+                <p className="text-xs font-black text-gray-900 dark:text-white">₹{totalExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
               </div>
             </div>
           </div>
@@ -146,8 +175,8 @@ export default function GenericWalletDashboard({ account, refreshTrigger }) {
         <div className="mb-3 relative">
           <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-3.5 h-3.5" />
           <input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)}
-            className="w-full pl-9 pr-8 py-2.5 text-sm rounded-xl bg-white dark:bg-[#161d27] text-gray-800 dark:text-[#c8d8e8] focus:outline-none transition-colors"
-            style={{ border: `1.5px solid ${accent}30` }} />
+            className="w-full pl-9 pr-8 py-2 text-xs rounded-xl bg-white dark:bg-[#161d27] text-gray-800 dark:text-[#c8d8e8] focus:outline-none transition-colors border border-gray-100 dark:border-[#1e2a38]"
+          />
           {dateFilter && (
             <button onClick={() => setDateFilter('')} className="absolute right-3 top-1/2 -translate-y-1/2 active:scale-90 transition-transform">
               <X className="w-3.5 h-3.5 text-gray-400" />
@@ -157,15 +186,14 @@ export default function GenericWalletDashboard({ account, refreshTrigger }) {
 
         <div className="space-y-2">
           {recent.length === 0 ? (
-            <div className="rounded-xl p-8 text-center bg-white dark:bg-[#161d27]"
-              style={{ border: `1px solid ${accent}20` }}>
+            <div className="rounded-xl p-8 text-center bg-white dark:bg-[#161d27] border border-gray-100 dark:border-[#1e2a38]">
               <p className="text-sm font-semibold text-gray-400 dark:text-[#6b7a8d]">No transactions yet</p>
             </div>
           ) : (
             recent.map((tx, i) => (
-              <div key={i} onClick={() => setSelected(tx)}
-                className="rounded-xl overflow-hidden cursor-pointer active:scale-[0.99] transition-transform bg-white dark:bg-[#161d27]"
-                style={{ border: `1px solid ${accent}18`, animationDelay: `${i * 0.04}s` }}>
+              <div key={tx.id || i} onClick={() => setSelected(tx)}
+                className="rounded-xl overflow-hidden cursor-pointer active:scale-[0.99] transition-transform bg-white dark:bg-[#161d27] border border-[#e8ecf0] dark:border-[#1e2a38] hover:border-[#cbd5e1] dark:hover:border-[#334155]"
+                style={{ animationDelay: `${i * 0.04}s` }}>
                 <div className="flex items-center gap-3 p-3">
                   <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
                     style={{ background: tx.txType === 'income' ? `${accent}18` : 'rgba(248,113,113,0.1)' }}>
@@ -175,10 +203,21 @@ export default function GenericWalletDashboard({ account, refreshTrigger }) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-gray-800 dark:text-[#c8d8e8] truncate">{tx.title || tx.source}</p>
+                    <p className="text-[10px] text-[#8a9bb0]">
+                      {formatDateTime(tx.date, tx.time)}
+                    </p>
+                    {tx.runningBalance !== undefined && (
+                      <div className="mt-0.5 flex items-center gap-1">
+                        <span className="text-[9px] font-medium text-[#8a9bb0]">Balance:</span>
+                        <span className={`text-[10px] font-bold ${tx.runningBalance >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                          ₹{parseFloat(tx.runningBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   <p className="text-sm font-black flex-shrink-0"
                     style={{ color: tx.txType === 'income' ? accent : '#f87171' }}>
-                    {tx.txType === 'income' ? '+' : '−'}₹{parseFloat(tx.amount).toFixed(2)}
+                    {tx.txType === 'income' ? '+' : '−'}₹{parseFloat(tx.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
               </div>
@@ -187,36 +226,79 @@ export default function GenericWalletDashboard({ account, refreshTrigger }) {
         </div>
       </div>
 
+      {/* Detail modal */}
       {selected && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setSelected(null)}>
-          <div className="bg-white dark:bg-[#1e293b] rounded-3xl max-w-sm w-full shadow-2xl animate-pop-in" onClick={e => e.stopPropagation()}>
-            <div className="h-1.5 rounded-t-3xl" style={{ background: `linear-gradient(90deg, ${accent}, ${accentD})` }} />
-            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Transaction Details</h2>
+          <div className="bg-white dark:bg-[#1e293b] rounded-3xl max-w-sm w-full shadow-2xl animate-pop-in border border-gray-100 dark:border-[#1e2a38] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="h-1.5" style={{ background: `linear-gradient(90deg, ${accent}, ${accentD})` }} />
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-base font-bold text-gray-900 dark:text-white">Transaction Details</h2>
               <button onClick={() => setSelected(null)} className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center active:scale-90 transition-transform">
-                <X className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                <X className="w-4 h-4 text-gray-600 dark:text-gray-400" />
               </button>
             </div>
-            <div className="p-6 space-y-3">
+            <div className="p-5 space-y-2.5">
               {[
-                ['Name',   selected.title || selected.source],
-                ['Type',   selected.txType === 'expense' ? 'Expense' : 'Income'],
-                ['Amount', `₹${parseFloat(selected.amount).toFixed(2)}`],
-                ['Date',   new Date(selected.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })],
-                ...(selected.category ? [['Category', selected.category]] : []),
-                ...(selected.notes    ? [['Notes',    selected.notes]]    : []),
-              ].map(([label, value]) => (
-                <div key={label} className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
-                  <span className="text-sm font-semibold text-gray-500 dark:text-gray-400">{label}</span>
-                  <span className="text-sm text-gray-900 dark:text-white font-medium"
+                ['Description',   selected.title || selected.source, 'font-semibold'],
+                ['Type',          selected.txType === 'expense' ? 'Expense' : 'Income', 'font-bold'],
+                ['Amount',        `₹${parseFloat(selected.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'font-black'],
+                ['Date',          formatDateDDMMYYYY(selected.date), ''],
+                ['Time',          formatTime12Hour(selected.time || selected.date), ''],
+                ...(selected.runningBalance !== undefined ? [['Balance After', `₹${parseFloat(selected.runningBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'font-bold text-emerald-500']] : []),
+                ...(selected.category ? [['Category', selected.category, '']] : []),
+                ...(selected.notes    ? [['Notes',    selected.notes, 'italic']]    : []),
+              ].map(([label, value, cls]) => (
+                <div key={label} className="flex items-center justify-between py-1.5 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">{label}</span>
+                  <span className={`text-xs text-gray-900 dark:text-white ${cls}`}
                     style={label === 'Amount' ? { color: accent } : {}}>
                     {value}
                   </span>
                 </div>
               ))}
             </div>
+
+            {/* Quick Actions in Detail View: Edit & Delete */}
+            <div className="p-4 border-t border-gray-100 dark:border-gray-700 flex gap-2">
+              <button
+                onClick={() => handleDelete(selected)}
+                className="px-3 py-2 rounded-xl bg-red-50 dark:bg-[#3a1a1a] text-red-500 font-bold text-xs flex items-center justify-center gap-1 active:scale-95"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => {
+                  const toEdit = selected;
+                  setSelected(null);
+                  setEditingTx(toEdit);
+                }}
+                className="flex-1 py-2 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95 shadow-sm"
+                style={{ backgroundColor: accent }}
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+                Edit Transaction
+              </button>
+            </div>
           </div>
         </div>
+      )}
+
+      {/* Edit Modal */}
+      {editingTx && (
+        <EditTransactionModal
+          isOpen={!!editingTx}
+          onClose={() => setEditingTx(null)}
+          transaction={editingTx}
+          accountId={account.id}
+          accountType="wallet"
+          accent={accent}
+          onSuccess={() => {
+            fetchData();
+          }}
+          onDeleteSuccess={() => {
+            fetchData();
+          }}
+        />
       )}
     </div>
   );
